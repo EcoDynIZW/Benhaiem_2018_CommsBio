@@ -16,9 +16,8 @@ The code code **2_Model analysis** is structured as follows:
 
   * a) Checking assumptions (irreducibility and ergodicity) 
   * b) Asymptotic analyses (population's growth rate, R0, stable stage distribution and reproductive values)
-     
-     i) Pre-epidemic
-     ii) Epidemic
-     iii) Post-epidemic
-     iv) Short-term population dynamics (Fig 4)
+     * i) Pre-epidemic
+     * ii) Epidemic
+     * iii) Post-epidemic
+     * iv) Short-term population dynamics (Fig 4)
 
