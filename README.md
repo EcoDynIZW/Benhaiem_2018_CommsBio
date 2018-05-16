@@ -15,7 +15,8 @@ This code presents the asymptotic analysis of the matrix model. For each epidemi
 The code code **2_Model analysis** is structured as follows:
 
   a) Checking assumptions (irreducibility and ergodicity) 
-  b) Asymptotic analyses (population's growth rate $\lambda$, R0, stable stage distribution and reproductive values)
+  b) Asymptotic analyses (population's growth rate $$\lambda$$, R0, stable stage distribution and reproductive values)
+  
     *i) Pre-epidemic
     ii) Epidemic
     iii) Post-epidemic
