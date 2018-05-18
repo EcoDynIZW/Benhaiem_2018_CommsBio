@@ -7,12 +7,8 @@ The code **1_Model construction** loads the input values for the *3 epidemic per
   * c) Assembling the submatrices into the meta-matrix
   * d) Building the next generation matrix for the estimation of R0
 
-
-Note that parameter and submatrix names may differ between main text and R codes.
-
-This code presents the asymptotic analysis of the matrix model. For each epidemic period, we first load the input files containing the MECMR parameter estimates for that period and then the R script to construct the matrix model.
-  
-The code code **2_Model analysis** is structured as follows:
+This code  **2_Model analysis** presents the asymptotic analysis of the matrix model. For each epidemic period, we first load the input files containing the MECMR parameter estimates for that period and then the R script to construct the matrix model.
+The code code is structured as follows:
 
   * a) Checking assumptions (irreducibility and ergodicity) 
   * b) Asymptotic analyses (population's growth rate, R0, stable stage distribution and reproductive values)
@@ -28,6 +24,9 @@ This code is structured as follows:
   * 1 Monte Carlo iterations to calcule the mean + SD of the population’s growth rate (Fig 1A), R0 (Fig 1B) and population abundance (Fig 5).
       * a) Plotting mean + SD of population’s growth rate and R0 (Fig 1)
       * b) Plotting changes in population abundance - complete model and “no rank” model (Fig 5)
-  * 2 Sensitivity analysis of the population’s growth rate (λλ)(Fig 2)
+  * 2 Sensitivity analysis of the population’s growth rate (λ)(Fig 2)
 
   * 3 Sensitivity analysis of R0 (Fig 3)
+  
+  Note that parameter and submatrix names may differ between main text and R codes.
+
