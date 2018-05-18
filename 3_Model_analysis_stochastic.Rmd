@@ -1,0 +1,907 @@
+---
+title: Document 3- R codes for the asymptotic analyses of a stage-structured matrix
+  model for spotted hyenas infected with CDV
+author: "S. Benhaiem, L. Marescot"
+date: '`r Sys.time()`'
+output:
+  html_document:
+    code_folding: hide
+  pdf_document: default
+  word_document: default
+---
+
+<style>
+  /* Style the linenumber div */
+
+  .linenumbers {
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: #EBEBEB;
+    text-align: center;
+    padding: 0px 3px;
+    font-family: monospace;
+    float: left;
+    position: absolute;
+    transform:translate(-125%);
+    font-size: inherit !important;
+  }
+
+.spoiler, .spoiler > * { transition: color 0.5s, opacity 0.5s }
+.spoiler:not(:hover) { color: transparent }
+.spoiler:not(:hover) > * { opacity: 0 }
+/* fix weird transitions on Chrome: */
+blockquote, blockquote > *:not(a) { color: black }
+</style>
+
+
+This code presents the stochastic analysis of the matrix model. To calculate standard deviations of ($\lambda$) and R0 (Figure 1), confidence intervals for the sensitivity analysis of ($\lambda$) and R0 (Figures 2,3) and to describe changes in population size over time while accounting for parameter uncertainty (Figure 5), we used Monte Carlo iterations. 
+
+
+This code is structured as follows:
+
+1) Monte Carlo iterations to calcule the mean + SD of the population's growth rate (Fig 1A), R0 (Fig 1B) and population abundance (Fig 5).
+
+  a) Plotting mean + SD of population's growth rate and R0 (Fig 1)
+  b) Plotting changes in population abundance - complete model and "no rank" model (Fig 5)
+
+2) Sensitivity analysis of the population's growth rate ($\lambda$)(Fig 2)
+
+3) Sensitivity analysis of R0 (Fig 3)    
+  
+Note that parameter and submatrix names may differ between main text and R codes.
+
+
+-----------------------------------------------------------------------------------------------------------------
+1) Monte Carlo iterations to calculate the mean + SD of the population's growth rate (Fig1A) R0 (Fig1B) and population abundance (Fig5)
+
+First, we create a function to compile the population indicators we are interested in; i.e. the mean population growth rate, R0, the population size, the sensitivity values of growth rate and R0 and their associated standard deviations.  
+
+
+```{r, message = FALSE}
+library(popdemo)
+library(popbio)
+
+# First we create the function to store the population indicators we are interested in
+
+  results<-function(Mproj, NGMstoch, popvec, senslambda, theta){
+  
+  tabmoy<-matrix(0,2,2)
+  rownames(tabmoy)<-c("lambda", "rnot")   
+  colnames(tabmoy)<-c("mean", "sd") 
+  
+  # Lambda 
+  alllambda<-unlist(lapply(Mproj, lambda))
+  mean_lambda<-mean(alllambda)
+  sd_lambda<-sd(alllambda)
+  tabmoy[1,1]<-mean_lambda
+  tabmoy[1,2]<-sd_lambda
+  
+  # R0
+  allrnot<-unlist(lapply(NGMstoch, lambda)) 
+  mean_rnot<-mean(allrnot)
+  sd_rnot<-sd(allrnot)
+  tabmoy[2,1]<-mean_rnot
+  tabmoy[2,2]<-sd_rnot
+  
+  # Population size
+  popsizeMean <- apply(popvec, 1, mean)
+  popsizeSD <- apply(popvec, 1, sd)
+
+  # Sensitivity of lambda (Mean +SD)
+  meansens<-matrix(0, nrow=MCiter, ncol=42)
+   
+  for (i in 1:MCiter)
+  meansens[i,]<-t(senslambda[[i]][2])
+  
+  sens_lambdaMean<-colMeans(meansens)
+  sens_lambdaSD <- apply(meansens,2,sd) 
+  names(sens_lambdaMean) <- rownames((senslambda[[1]])) 
+  names(sens_lambdaSD) <- rownames((senslambda[[1]]))  
+  
+  
+  # Sensitivity of R0 (Mean +SD)
+  #preparing empty table where we   get the mean + SD of sens values 
+  SensR0<- matrix(data = 0, nrow=ncol(theta), ncol=3)# here empty
+
+  #########----------- running the function which caluculates the senstivity of R0
+if(t == "epidem")
+{  
+  for(r in 1:ncol(theta))
+{
+  sensi<- sens_elas_num(r, theta, delta=1e-4) # here we apply the sens_elas_num function! r = pos
+  SensR0[r,2]<-as.numeric(mean(sensi[[2]])) 
+  SensR0[r,3]<-as.numeric(sd(sensi[[2]]))
+  SensR0[r,1]<-as.character(sensi[[1]])
+}
+}
+  
+  return(list(tabmoy, popsizeMean, popsizeSD, sens_lambdaMean, sens_lambdaSD, SensR0)) 
+}
+```
+
+Second, we load the text file containing the regression coefficients and the two R files MCSimulations and MCSimulations_postepidem. In these two R files, we first draw 1000 values from normal distributions with means equal to the regression coefficients of the MECMR model and with standard deviations equal to the standard errors associated with these regression coefficients. To obtain the MECMR parameter estimates and insure that they corresponded to probabilities bounded between 0 and 1, we back-transformed those simulated regression coefficients using the logit-function after accounting for the structural interactions and the temporal additive effects detected on those parameters. 
+
+
+```{r} 
+data<-read.table("./RegressionCoefficient.txt", header = TRUE) #CHANGE NAME --> data is not good
+
+MCiter<-1000 # Number of Monte Carlo iterations 
+
+checkNodisease <- FALSE # Check if we are in the projection phase were the disease is extinct (then set the infection probaility to 0 in the MC_simualtionsUnique.R file)
+# Pre-epidemic period (1990-1992)
+t<-"pre-epidem"
+period <- t
+popsize0<-100
+Tmax<-3 
+source('MC_simulations.R')
+
+tabprepidem<-results(Mproj, NGMstoch, popvec,senslambda, theta)
+
+# Epidemic period (1993-1994)
+t<-"epidem"
+period <- t
+Tmax<-3 
+popsize0<-tabprepidem[[2]][3]
+source('MC_simulations.R')
+tabepidem<-results(Mproj, NGMstoch, popvec,senslambda, theta)
+
+# Post-epidemic period (1995-1999)
+t<-"post-epidem1" 
+period <- t
+Tmax<-6 
+popsize0<-tabepidem[[2]][3]
+source('MC_simulations.R')
+tabpost1<-results(Mproj, NGMstoch, popvec,senslambda, theta)
+
+# Period of virus absence in the ecosystem (2000-2010)
+t<-"post-epidem2" 
+period <- t
+Tmax<-12 
+popsize0<-tabpost1[[2]][6]
+
+source('MC_simulations.R')
+tabpost2<-results(Mproj, NGMstoch, popvec,senslambda, theta) 
+
+# Projections in the future (2010 to 2020)
+Tmax<-13 
+checkNodisease == TRUE 
+popsize0<-tabpost2[[2]][12]
+source('MC_simulations.R')
+tabprojection<-results(Mproj, NGMstoch, popvec,senslambda, theta)
+```
+
+
+a) Plotting mean + SD of population's growth rate and R0 (Fig1)
+
+```{r} 
+
+data2 <- matrix(0,3,4)
+colnames(data2) <- c("R0.mean", "R0.SD","Lambda", "Lambda.SD")
+rownames(data2) <- c("pre-epidem", "epidem","post-epidem1")
+
+data2[1,3]<-tabprepidem[[1]][1,1] # mean lambda
+data2[1,4]<-tabprepidem[[1]][1,2] # SD lambda
+data2[1,1]<-tabprepidem[[1]][2,1] # mean R0
+data2[1,2]<-tabprepidem[[1]][2,2] # SD R0
+
+data2[2,3]<-tabepidem[[1]][1,1] # mean lambda
+data2[2,4]<-tabepidem[[1]][1,2] # SD lambda
+data2[2,1]<-tabepidem[[1]][2,1] # mean R0
+data2[2,2]<-tabepidem[[1]][2,2] # SD R0
+
+data2[3,3]<-tabpost1[[1]][1,1] # mean lambda
+data2[3,4]<-tabpost1[[1]][1,2] # SD lambda
+data2[3,1]<-tabpost1[[1]][2,1] # mean R0
+data2[3,2]<-tabpost1[[1]][2,2] # SD R0
+
+par(mfrow=c(1,2))
+
+x<-c(0.5,1,2,3,3.5) 
+
+colvec <- c("white","black","#CC6600","black","white")
+
+# -------------------- > lambda
+
+mean<-c(0,data2[c("pre-epidem","epidem","post-epidem1"),3],0) 
+sd<-c(0,data2[c("pre-epidem","epidem","post-epidem1"),4],0)
+
+mean<-as.numeric(mean)
+sd<-as.numeric(sd)
+
+library(plotrix)
+
+par(mar=c(8.1,5.1,5.1,5.1))
+plotCI(x,mean, 
+       uiw=sd, err="y",las=1, ylab = "", cex=1.4,xaxt="n", ylim=c(0.90,1.10),xlab ="", cex.axis=1.4,
+       lwd=4, pch=20, col =colvec) 
+
+names(x)<-c("pre-epidem","epidem","post-epidem","")
+colvec2 <-c("black","#CC6600","black")
+
+axis(side=1,at=c(1:5),label=names(x),cex.axis=1.3, las =2)
+mtext(side = 2, text ="Population growth rate", line = 3.7, cex=1.6)
+abline(h=1, lty=2)
+mtext(side = 3,text=c("a)"),adj=0, line =1.7,cex = 1.3)
+
+
+mean1<-c(-0.5,data2[c("pre-epidem","epidem","post-epidem1"),1],-0.5) 
+sd1<-c(-0.5,data2[c("pre-epidem","epidem","post-epidem1"),2],-0.5)
+
+mean1<-as.numeric(mean1)
+sd1<-as.numeric(sd1)
+
+colvec1 <- c("black","black","#CC6600","black")
+
+plotCI(x,mean1, 
+       uiw=sd1, err="y",las=1, ylab = "", cex=1.4,xaxt="n",
+       ylim=c(0,7),xlab ="", cex.axis=1.4,
+       lwd=4, pch=20, col=colvec1) 
+
+names(x)<-c("pre-epidem","epidem","post-epidem","")
+axis(side=1,at=c(1:5),label=names(x),cex.axis=1.3,las =2)
+mtext(side = 2, text ="Basic reproduction number", line = 3.7, cex=1.6)
+abline(h=1, lty=2)
+mtext(side = 3,text=c("b)"),adj=0, line =1.7,cex = 1.3)
+
+```
+
+
+b) Plotting changes in population abundance - complete model and "no rank" model Fig5)
+
+
+We can then describe past (1990-2010) and predicted (2011-2020) temporal changes in population abundance (Figure 5) given parameter uncertainty during the 20 years of survey (1990-2010). 
+
+- To describe the past temporal changes during the study period (1990-2010) we calculated 1000 values of population growth rate for each year of the study period accounting for temporal variations in the mean estimates between the pre-epidemic, epidemic and post-epidemic phases. We described with a Markov chain the changes in population size by mutliplying population vector of a given year by lambda and reinitialiaze the population vector to the resulting vector of next year abundance. the initial population vector was defined as the product of 100 individuals and the stable stage distribution.     
+- To predict abundance of spotted hyenas for 10 years after the end of the study period (i.e. 2011-2020) (see MCSimulations_postepidem.R), we considered the 1000 block-matrices M implemented with the MECMR parameter estimates associated with the second post-epidemic period (2000-2010), and we determined the population vector of the number of individuals in the 22 demographic, social and infection states during the last year of the survey (2010). This vector was defined as the product of the mean abundance estimated in 2010 and the stable stage distribution. We then multiplied the matrices with this population vector to obtain 1000 population vectors and calculate the confidence intervals of the abundance the following year. These population vectors were then multiplied again by the simulated matrices to calculate the mean abundance and its associated confidence interval in the following year. In such case the range of abundance increases with time as we use all the poulation vectors from a previous year (and not only the mean one) to calculate the range of population sizes the next year, accounting for the uncertainty around the parameter estimates. This Markov chain in which the population vectors of the next year only depend on the population vectors of the current year and of the simulated projection matrices was then reiterated for 10 years.   
+
+
+```{r} 
+
+lambdaseq <- c(rep(tabprepidem[[1]][1,1], 3), rep(tabepidem[[1]][1,1], 2) , rep(tabpost1[[1]][1,1], 5),rep(tabpost2[[1]][1,1], 11),rep(tabprojection[[1]][1,1], 10))  
+
+lambdase <- c(rep(tabprepidem[[1]][1,2], 3), rep(tabepidem[[1]][1,2], 2) , rep(tabpost1[[1]][1,2], 5),rep(tabpost2[[1]][1,2], 11),rep(tabprojection[[1]][1,2], 10))  
+
+popproj<-rep(0,31) 
+popproj[1]<-100 
+varmoins<-rep(0,31) 
+varplus<-rep(0,31)
+varplus[1]<-100 
+varmoins[1]<-100 
+
+
+for(t in 2:21) 
+{
+  popproj[t]<-popproj[t-1] * lambdaseq[t] 
+  varplus[t]<-popproj[t-1]  * (lambdaseq[t] + lambdase[t])
+  varmoins[t]<-popproj[t-1]  * (lambdaseq[t] - lambdase[t])
+}  
+
+p<-1
+for(t in 23:32)
+{
+  p<-p+1 
+  popproj[t]<- tabprojection[[2]][p]
+  varplus[t]<- tabprojection[[2]][p] +  tabprojection[[3]][p] 
+  varmoins[t]<- tabprojection[[2]][p] - tabprojection[[3]][p]
+}  
+
+# Here We delete the meaningless growth rate obtained at the first year of predicitons phase, which correponds to  a year of transition between the descriptive and predicitve part of the analysis 
+popproj<-popproj[-22] 
+varplus<-varplus [-22] 
+varmoins<-varmoins[-22] 
+
+####
+
+mat2 <- cbind(popproj,varmoins,varplus)
+
+mat2<-as.data.frame(mat2)
+mat2$Model<-rep("normal", 31) 
+mat2$Time<-1:31
+mat2$Time1 <-c(1990:2020) 
+
+mat2
+```
+
+In the next step we repeat this procedure for the model "no rank".
+
+```{r}
+
+data<-read.table("./RegressionCoefficientNORANK.txt", header = TRUE)
+
+checkNodisease <- FALSE
+t<-"pre-epidem"
+period<-t
+popsize0<-100
+Tmax<-3 
+source('MC_simulations.R')
+tabprepidemNR<-results(Mproj, NGMstoch, popvec, senslambda, theta)
+
+t<-"epidem"
+period<-t
+Tmax<-3 
+popsize0<-tabprepidemNR[[2]][3]
+source('MC_simulations.R')
+tabepidemNR<-results(Mproj, NGMstoch, popvec, senslambda, theta)
+
+t<-"post-epidem1" 
+period<-t
+Tmax<-6 
+popsize0<-tabepidemNR[[2]][3]
+source('MC_simulations.R')
+tabpost1NR<-results(Mproj, NGMstoch, popvec, senslambda, theta)
+
+t<-"post-epidem2"
+Tmax<-12 
+period<-t
+popsize0<-tabpost1NR[[2]][6]
+source('MC_simulations.R')
+
+tabpost2NR<-results(Mproj, NGMstoch, popvec, senslambda, theta)
+
+Tmax<-13
+period<-t
+checkNodisease <- TRUE
+popsize0<-tabpost2NR[[2]][12]
+source('MC_simulations.R')
+tabprojectionNR<-results(Mproj, NGMstoch, popvec, senslambda, theta)
+```
+
+We store in a data frame the population vectors describing variations in expected abundance over 30 years, in both model with and without rank effect. 
+```{r}
+lambdaseq <- c(rep(tabprepidemNR[[1]][1,1], 3), rep(tabepidemNR[[1]][1,1], 2) , rep(tabpost1NR[[1]][1,1], 5),rep(tabpost2NR[[1]][1,1], 11),rep(tabprojectionNR[[1]][1,1], 10)) 
+
+lambdase <- c(rep(tabprepidemNR[[1]][1,2], 3), rep(tabepidemNR[[1]][1,2], 2) , rep(tabpost1NR[[1]][1,2], 5),rep(tabpost2NR[[1]][1,2], 11),rep(tabprojectionNR[[1]][1,2], 10)) 
+
+ 
+popproj<-rep(0,31) # vecteur avec 31fois 0
+popproj[1]<-100 # on replace la premiere entree par 100
+varmoins<-rep(0,31)
+varplus<-rep(0,31)
+varplus[1]<-100 # pas d erreur sur la premiere valeur
+varmoins[1]<-100 # pas d erreur sur la premiere valeur
+
+
+# loop on the retrospective (1990 to 2010)
+
+for(t in 2:21) # starts at 2 because t-1 if t=1 is 0
+{
+  popproj[t]<-popproj[t-1] * lambdaseq[t]
+  varplus[t]<-popproj[t-1]  * (lambdaseq[t] + lambdase[t])
+  varmoins[t]<-popproj[t-1]  * (lambdaseq[t] - lambdase[t])
+} 
+
+# Projections 2000-2010
+
+p<-1
+for(t in 22:33)
+{
+  p<-p+1 # to move to the next value
+  popproj[t]<- tabprojectionNR[[2]][p]
+  varplus[t]<- tabprojectionNR[[2]][p] + tabprojectionNR[[3]][p]
+  varmoins[t]<- tabprojectionNR[[2]][p] - tabprojectionNR[[3]][p]
+} 
+
+# delete 2011/2012
+popproj<-popproj[-22]
+varplus<-varplus [-22]
+varmoins<-varmoins[-22]
+
+popproj<-popproj[-22]
+varplus<-varplus [-22]
+varmoins<-varmoins[-22]
+
+matNR <- cbind(popproj,varmoins,varplus)
+matNR<-as.data.frame(matNR)
+matNR$Model<-rep("NR", 31)
+
+matNR$Time<-1:31
+matNR$Time1 <-c(1990:2020)
+
+
+matNEW <-rbind(mat2,matNR) 
+matNEW
+
+```
+
+Then we plot Figure 5:
+
+
+```{r } 
+
+library(ggplot2)
+
+p <- ggplot(data=matNEW, aes(x=Time1, y=popproj, ymin=varmoins, ymax=varplus)) + 
+
+  geom_rect(aes(xmin=1992, xmax=1994, ymin=-Inf, ymax=Inf), fill="#FFCC99",alpha=0.5) +
+  
+  geom_line(data=matNEW[matNEW$Model=="normal", ],aes(colour="myline1",x=Time1, y=popproj),size=1.5) + 
+  geom_ribbon(data=matNEW[matNEW$Model=="normal", ],alpha=0.7, color= "white",fill ="#CC79A7")  + xlab("Year") + ylab("Abundance") +
+  
+  geom_line(data=matNEW[matNEW$Model=="NR", ],aes(colour="myline2",x=Time1, y=popproj),size=1.5) + 
+  geom_ribbon(data=matNEW[matNEW$Model=="NR", ],alpha=0.7, color= "white",fill ="#56B4E9") + xlab("Year") + ylab("Abundance") +
+  
+  scale_colour_manual(name="Model",values=c(myline1="#CC79A7", myline2="#56B4E9"),
+                      labels = c("COMPLETE MODEL", "NO RANK MODEL")) + 
+  ylim(50, 185) +
+
+  scale_x_continuous(breaks = round(seq(min(matNEW$Time1), max(matNEW$Time1), by = 4),1)) 
+
+
+p + theme_bw() +
+  
+  theme( 
+    axis.line = element_line(colour = "black"),
+    axis.text = element_text(size=15),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.border = element_blank(),
+    panel.background = element_blank(), 
+    axis.title.x = element_text(colour="black",size=18,angle=0,hjust=.5,vjust=0,face="plain"),
+    axis.title.y = element_text(colour="black",size=18),
+    plot.margin = unit(c(7.5, 12.5, 5.5, 5.5), "points")
+  ) 
+
+```
+
+3) Sensitivity analyses of the population's growth rate ($\lambda$)(Fig2)
+
+To determine which parameters contributed most to($\lambda$) and predict the results of future changes in parameter estimates, we performed a sensitivity analysis. When elements of a population matrix are composed of several vital rates, the classical first order sensitivity analysis is not recommended, as it does not allow disentangling the effects of demographic, social and infection parameters. Therefore, we conducted lower-level sensitivity analyses for ($\lambda$). In the source file **MCSimulations** and **MCSimulations_postepidem** we applied the function 'vitalsens' from the R package 'popbio which evaluate the expression oft the matrix projection using all parameter values of the MonteCarlo iterations.
+
+
+
+```{r, plot=FALSE} 
+
+nf <- layout(matrix(c(0,0,0,0,1,0,0,2,0,0,3,0,0,0,0),3, byrow = FALSE),
+             widths= c(0.1,1.8,1.8,1.8,0.1), heights=c(1,3.5,1,1,0)) # widths for columns,heights for rows 
+layout.show(nf)
+
+
+ figtab<-cbind(as.numeric(tabprepidem[[4]]), as.numeric(tabprepidem[[5]]), as.numeric(tabepidem[[4]]), as.numeric(tabepidem[[5]]), as.numeric(tabpost1[[4]]), as.numeric(tabpost1[[5]]), as.numeric(tabpost2[[4]]), as.numeric(tabpost2[[5]])) # removes the character names and the ""
+
+  
+  
+  colnames(figtab)<-c("sens_preepidem","sd_preepidem", "sens_epidem","sd_epidem", "sens_postepidem1","sd_postepidem1", "sens_postpidem2","sd_postepidem2")
+
+  figtab<-as.data.frame(figtab)
+  figtab$param<-names(tabepidem[[5]])
+#-------- Pre-Epidem
+# 1) Select sens values whose abs. value is higher than 10% 
+sensNew<-subset(figtab, abs(figtab$sens_preepidem) >= 0.10)
+
+# 2) Order by decreasing importance
+sensNew1<-sensNew[order(abs(sensNew$sens_preepidem),decreasing=TRUE),] # Order from highest impact on lambda to
+
+# -- Plot; decreasing importance 
+
+par(mar=c(5.1,5.1,4.1,2.1))
+
+color = rep(NA, length=length(sensNew1$param))
+
+color[which(sensNew1$param=="bSH")] = "olivedrab1"
+color[which(sensNew1$param=="bBH")] = "olivedrab3"
+color[which(sensNew1$param=="bNBH")] = "olivedrab4"
+
+color[which(sensNew1$param=="bSL")] = "olivedrab1"
+color[which(sensNew1$param=="bBL")] = "olivedrab3"
+color[which(sensNew1$param=="bNBL")] = "olivedrab4"
+
+color[which(sensNew1$param=="rHH.R")] = "orange1"
+color[which(sensNew1$param=="rLL.R")] = "orange1"
+
+color[which(sensNew1$param=="phiBHR")] = "royalblue4"
+color[which(sensNew1$param=="phiNBHR")] = "steelblue1"
+
+#color[which(sensNew1$param=="phiBHS")] = "skyblue3"
+#color[which(sensNew1$param=="phiNBHS")] = "skyblue1"
+
+#color[which(sensNew1$param=="phiBLR")] = "royalblue4"
+color[which(sensNew1$param=="phiNBLR")] = "steelblue1"
+
+#color[which(sensNew1$param=="phiBLS")] = "skyblue3"
+#color[which(sensNew1$param=="phiNBLS")] = "skyblue1"
+
+dashed = rep(NA, length=length(sensNew1$param))
+dashed[which(sensNew1$param=="bSH")] = NA
+dashed[which(sensNew1$param=="bBH")] = NA
+dashed[which(sensNew1$param=="bNBH")] = NA
+
+dashed[which(sensNew1$param=="bSL")] = 30
+dashed[which(sensNew1$param=="bBL")] = 30
+dashed[which(sensNew1$param=="bNBL")] = 30
+
+dashed[which(sensNew1$param=="rHH.R")] = NA
+dashed[which(sensNew1$param=="rLL.R")] = 30
+
+dashed[which(sensNew1$param=="phiBHR")] = NA
+dashed[which(sensNew1$param=="phiNBHR")] = NA
+
+#dashed[which(sensNew1$param=="phiBHS")] = NA
+#dashed[which(sensNew1$param=="phiNBHS")] = NA
+
+#dashed[which(sensNew1$param=="phiBLR")] = 80
+dashed[which(sensNew1$param=="phiNBLR")] = 30
+
+#dashed[which(sensNew1$param=="phiBLS")] = 80
+#dashed[which(sensNew1$param=="phiNBLS")] = 80
+
+
+
+bp<-barplot(sensNew1$sens_preepidem, las=1,col=color, ylab=(expression("Sensitivity "*lambda)), cex =0.6,
+            xpd=FALSE, main="", ylim=c(-0.5,1.1), cex.lab = 2.2, 
+            cex.axis= 1.4,xlim=c(0,13), density=dashed, angle =0)
+
+lines(c(-0.75,20),c(0,0))
+
+arrows(bp, sensNew1$sens_preepidem - sensNew1$sd_preepidem , bp,
+       sensNew1$sens_preepidem + sensNew1$sd_preepidem  , lwd = 1.5, angle = 90,
+       code = 3, length = 0.03)
+#mtext(side = 3,text=c("a) pre-epidem"),adj=0, line =1.7,cex = 1.3)
+
+mtext(side = 3,text= expression(paste(bold("a"))),adj=0, line =1.7,cex = 1.6)
+
+
+
+#-------- Epidem
+# 1) Select sens values whose abs. value is higher than 10% 
+sensNew<-subset(figtab, abs(figtab$sens_epidem) >= 0.10)
+
+# 2) Order by decreasing importance
+sensNew1<-sensNew[order(abs(sensNew$sens_epidem),decreasing=TRUE),] # Order from highest impact on lambda to
+#n =12 
+# -- Plot; decreasing importance 
+
+par(mar=c(5.1,5.1,4.1,2.1))
+
+color = rep(NA, length=length(sensNew1$param))
+
+color[which(sensNew1$param=="bSH")] = "olivedrab1"
+color[which(sensNew1$param=="bBH")] = "olivedrab3"
+color[which(sensNew1$param=="bNBH")] = "olivedrab4"
+
+color[which(sensNew1$param=="bSL")] = "olivedrab1"
+color[which(sensNew1$param=="bBL")] = "olivedrab3"
+color[which(sensNew1$param=="bNBL")] = "olivedrab4"
+
+color[which(sensNew1$param=="rHH.R")] = "orange1"
+color[which(sensNew1$param=="rLL.R")] = "orange1"
+
+color[which(sensNew1$param=="phiBHR")] = "royalblue4"
+color[which(sensNew1$param=="phiNBHR")] = "steelblue1"
+
+color[which(sensNew1$param=="phiBHS")] = "skyblue3"
+color[which(sensNew1$param=="phiNBHS")] = "skyblue1"
+
+color[which(sensNew1$param=="phiBLR")] = "royalblue4"
+color[which(sensNew1$param=="phiNBLR")] = "steelblue1"
+
+#color[which(sensNew1$param=="phiBLS")] = "skyblue3"
+#color[which(sensNew1$param=="phiNBLS")] = "skyblue1"
+
+dashed = rep(NA, length=length(sensNew1$param))
+dashed[which(sensNew1$param=="bSH")] = NA
+dashed[which(sensNew1$param=="bBH")] = NA
+dashed[which(sensNew1$param=="bNBH")] = NA
+
+dashed[which(sensNew1$param=="bSL")] = 30
+dashed[which(sensNew1$param=="bBL")] = 30
+dashed[which(sensNew1$param=="bNBL")] = 30
+
+dashed[which(sensNew1$param=="rHH.R")] = NA
+dashed[which(sensNew1$param=="rLL.R")] = 30
+
+dashed[which(sensNew1$param=="phiBHR")] = NA
+dashed[which(sensNew1$param=="phiNBHR")] = NA
+
+#dashed[which(sensNew1$param=="phiBHS")] = NA
+#dashed[which(sensNew1$param=="phiNBHS")] = NA
+
+dashed[which(sensNew1$param=="phiBLR")] = 30
+dashed[which(sensNew1$param=="phiNBLR")] = 30
+
+#dashed[which(sensNew1$param=="phiBLS")] = 80
+#dashed[which(sensNew1$param=="phiNBLS")] = 80
+
+bp<-barplot(sensNew1$sens_epidem, las=1,col=color, ylab=(expression("Sensitivity "*lambda)), cex =0.6,
+            xpd=FALSE, main="", ylim=c(-0.5,1.1), 
+            cex.lab = 2.2, cex.axis= 1.4,xlim=c(0,14),density=dashed, angle =0) # xpd = Should bars be allowed to go outside region?
+lines(c(-0.75,20),c(0,0))
+
+arrows(bp, sensNew1$sens_epidem - sensNew1$sd_epidem , bp,
+       sensNew1$sens_epidem + sensNew1$sd_epidem  , lwd = 1.5, angle = 90,
+       code = 3, length = 0.03)
+
+#mtext(side = 3,text=c("b) epidem"),adj=0, line =1.7,cex = 1.3)
+mtext(side = 3,text= expression(paste(bold("b"))),adj=0, line =1.7,cex = 1.6)
+
+# Post-epidem 
+
+# 1) Select sens values whose abs. value is higher than 10% 
+sensNew<-subset(figtab, abs(figtab$sens_postepidem1) >= 0.10)
+
+# 2) Order by decreasing importance
+sensNew1<-sensNew[order(abs(sensNew$sens_postepidem1),decreasing=TRUE),] # Order from highest impact on lambda to
+
+# -- Plot; decreasing importance 
+
+par(mar=c(5.1,5.1,4.1,2.1))
+color = rep(NA, length=length(sensNew1$param))
+
+color[which(sensNew1$param=="bSH")] = "olivedrab1"
+color[which(sensNew1$param=="bBH")] = "olivedrab3"
+color[which(sensNew1$param=="bNBH")] = "olivedrab4"
+
+color[which(sensNew1$param=="bSL")] = "olivedrab1"
+color[which(sensNew1$param=="bBL")] = "olivedrab3"
+color[which(sensNew1$param=="bNBL")] = "olivedrab4"
+
+color[which(sensNew1$param=="rHH.R")] = "orange1"
+color[which(sensNew1$param=="rLL.R")] = "orange1"
+
+color[which(sensNew1$param=="phiBHR")] = "royalblue4"
+color[which(sensNew1$param=="phiNBHR")] = "steelblue1"
+
+#color[which(sensNew1$param=="phiBHS")] = "skyblue3"
+#color[which(sensNew1$param=="phiNBHS")] = "skyblue1"
+
+color[which(sensNew1$param=="phiBLR")] = "royalblue4"
+color[which(sensNew1$param=="phiNBLR")] = "steelblue1"
+
+#color[which(sensNew1$param=="phiBLS")] = "skyblue3"
+#color[which(sensNew1$param=="phiNBLS")] = "skyblue1"
+
+dashed = rep(NA, length=length(sensNew1$param))
+dashed[which(sensNew1$param=="bSH")] = NA
+dashed[which(sensNew1$param=="bBH")] = NA
+dashed[which(sensNew1$param=="bNBH")] = NA
+
+dashed[which(sensNew1$param=="bSL")] = 30
+dashed[which(sensNew1$param=="bBL")] = 30
+dashed[which(sensNew1$param=="bNBL")] = 30
+
+dashed[which(sensNew1$param=="rHH.R")] = NA
+dashed[which(sensNew1$param=="rLL.R")] = 30
+
+dashed[which(sensNew1$param=="phiBHR")] = NA
+dashed[which(sensNew1$param=="phiNBHR")] = NA
+
+#dashed[which(sensNew1$param=="phiBHS")] = NA
+#dashed[which(sensNew1$param=="phiNBHS")] = NA
+
+dashed[which(sensNew1$param=="phiBLR")] = 30
+dashed[which(sensNew1$param=="phiNBLR")] = 30
+
+#dashed[which(sensNew1$param=="phiBLS")] = 80
+#dashed[which(sensNew1$param=="phiNBLS")] = 80
+
+bp<-barplot(sensNew1$sens_postepidem1, las=1,col=color,ylab=(expression("Sensitivity "*lambda)), cex =0.6,
+            xpd=FALSE, main="", 
+            density= dashed, angle =0,ylim=c(-0.5,1.1), cex.lab = 2.2, cex.axis= 1.4,xlim=c(0,14)) # xpd = Should bars be allowed to go outside region?
+lines(c(-0.75,20),c(0,0))
+
+arrows(bp, sensNew1$sens_postepidem1 - sensNew1$sd_postepidem1, bp,
+       sensNew1$sens_postepidem1 + sensNew1$sd_postepidem1, lwd = 1.5, angle = 90,
+       code = 3, length = 0.03)
+
+#mtext(side = 3,text=c("c) post-epidem"),adj=0, line =1.7,cex = 1.3)
+mtext(side = 3,text= expression(paste(bold("c"))),adj=0, line =1.7,cex = 1.6)
+
+
+
+# Overall legend 
+
+#rm(list=ls()) # remove all objects/memory
+#gc()
+
+par(mar=c(5.1,5.1,4.1,2.1))
+
+plot(sensNew1$sens_postepidem1, pch ="",xlab="",ylab="")
+
+legend("topright", 
+       
+c("Breeding SA.H","Breeding SA.L","Breeding B.H","Breeding B.L","Breeding NB.H","Breeding NB.L",
+ "Staying H","Staying L",
+ "Survival C.H.S","Survival C.L.S", "Survival SA.H","Survival SA.L","Survival SA.I&R", "Survival B","Survival NB",
+ "Infection C.H", "Infection C.L", "Infection SA.B.NB.H","Infection SA.B.NB.L",
+ "Sex ratio")
+       ,
+       fill= c("olivedrab4", "olivedrab4", "olivedrab1","olivedrab1","olivedrab3","olivedrab3",
+               "orange1","orange1",
+               "cadetblue","cadetblue","aquamarine4","aquamarine4","aquamarine1","royalblue4","skyblue3",
+               "darkmagenta","darkmagenta","darkorchid1","darkorchid1",
+               "gray0")
+,
+       density = c(NA,80,NA,80,NA,80,
+                   NA,80,
+                   NA,80,NA,80,NA,NA,NA,
+                   NA,80,NA,80,
+                   NA))
+
+```
+
+
+
+4) Here we determine which parameters contributed most to variation in *R0* in order to predict future disease dynamics with changes in parameter $(\theta)$. Because we did not have a symbolic expression of the next generation matrix, we could not apply the vitalsens function as we did for calculating the sensitvity of lambda. Instead, we performed the sensitivity analysis of R0 by coding the following equation $\delta(R0)/\delta(\theta)$.
+
+ Now we plot the sensitivity value of R0
+```{r} 
+
+figtab<-cbind(as.numeric(tabepidem[[6]][,2]), as.numeric(tabepidem[[6]][,3])) # removes the character names 
+
+  
+colnames(figtab)<-c("sens_epidem","sd_epidem")
+
+figtab<-as.data.frame(figtab)
+
+figtab$sens_epidem[12:15]<- 1 - figtab$sens_epidem[12:15]
+
+figtab$param<- as.character(tabepidem[[6]][,1])
+ 
+
+
+#-------- Epidem
+# 1) Select sens values whose abs. value is higher than 10% 
+sensNew<-subset(figtab, abs(figtab$sens_epidem) >= 0.10)
+
+# 2) Order by decreasing importance
+sensNew1<-sensNew[order(abs(sensNew$sens_epidem),decreasing=TRUE),] # Order from highest impact on lambda to
+
+sensNew1$param<-c("Breeding_BH", "Infection_SA&B&NBH", "Infection_SA&B&NBL", "Breeding_NBH", "Staying_H", "Survival_NB", "Breeding_SAH", "Infection_CH", "Infection_CL", "Staying_L", "Breeding_BL", "Survival_B", "Breeding_NBL","Survival_CLS","Survival_CHS","Survival_SAHS","Breeding_SAL","Survival_SALS","Survival_SAI&R")
+
+# -- Plot; decreasing importance 
+
+par(mar=c(5.1,5.1,4.1,2.1))
+
+color = rep(NA, length=length(sensNew1$param))
+
+# Survival 
+# cubs
+color[which(sensNew1$param=="Survival_CHS")] = "cadetblue"
+#color[which(sensNew1$param=="Survival_CHI")] = "cadetblue1"
+
+color[which(sensNew1$param=="Survival_CLS")] = "cadetblue"
+#color[which(sensNew1$param=="Survival_CLI")] = "cadetblue1"
+
+# subadults
+color[which(sensNew1$param=="Survival_SAHS")] = "aquamarine4"
+color[which(sensNew1$param=="Survival_SAI&R")] = "aquamarine1"
+
+color[which(sensNew1$param=="Survival_SALS")] = "aquamarine4"
+
+#breeders
+color[which(sensNew1$param=="Survival_B")] = "royalblue4"
+
+#Nonbreeders
+color[which(sensNew1$param=="Survival_NB")] = "skyblue3"
+
+#rank transitions
+color[which(sensNew1$param=="Staying_H")] = "orange1"
+color[which(sensNew1$param=="Staying_L")] = "orange1"
+
+# Infection proba
+color[which(sensNew1$param=="Infection_CH")] = "darkmagenta"
+color[which(sensNew1$param=="Infection_CL")] = "darkmagenta"
+
+color[which(sensNew1$param=="Infection_SA&B&NBH")] = "darkorchid1"
+color[which(sensNew1$param=="Infection_SA&B&NBL")] = "darkorchid1"
+
+# Breeding
+color[which(sensNew1$param=="Breeding_BH")] = "olivedrab1"
+color[which(sensNew1$param=="Breeding_NBH")] = "olivedrab3"
+color[which(sensNew1$param=="Breeding_SAH")] = "olivedrab4"
+
+color[which(sensNew1$param=="Breeding_BL")] = "olivedrab1"
+color[which(sensNew1$param=="Breeding_NBL")] = "olivedrab3"
+color[which(sensNew1$param=="Breeding_SAL")] = "olivedrab4"
+
+#Sex ratio
+color[which(sensNew1$param=="SexRatio")] = "gray0"
+
+dashed = rep(NA, length=length(sensNew1$param))
+
+dashed[which(sensNew1$param=="Survival_CHS")] = NA
+#dashed[which(sensNew1$param=="Survival_CHI")] = "cadetblue1"
+
+dashed[which(sensNew1$param=="Survival_CLS")] = 80
+#dashed[which(sensNew1$param=="Survival_CLI")] = "cadetblue1"
+
+# subadults
+dashed[which(sensNew1$param=="Survival_SAHS")] = NA
+dashed[which(sensNew1$param=="Survival_SAI&R")] = NA
+
+dashed[which(sensNew1$param=="Survival_SALS")] = 80
+
+#breeders
+dashed[which(sensNew1$param=="Survival_B")] = NA
+
+#Nonbreeders
+dashed[which(sensNew1$param=="Survival_NB")] = NA
+
+#rank transitions
+dashed[which(sensNew1$param=="Staying_H")] = NA
+dashed[which(sensNew1$param=="Staying_L")] = 80
+
+# Infection proba
+dashed[which(sensNew1$param=="Infection_CH")] = NA
+dashed[which(sensNew1$param=="Infection_CL")] = 80
+
+dashed[which(sensNew1$param=="Infection_SA&B&NBH")] = NA
+dashed[which(sensNew1$param=="Infection_SA&B&NBL")] = 80
+
+# Breeding
+dashed[which(sensNew1$param=="Breeding_BH")] = NA
+dashed[which(sensNew1$param=="Breeding_NBH")] = NA
+dashed[which(sensNew1$param=="Breeding_SAH")] = NA
+
+dashed[which(sensNew1$param=="Breeding_BL")] = 80
+dashed[which(sensNew1$param=="Breeding_NBL")] = 80
+dashed[which(sensNew1$param=="Breeding_SAL")] = 80
+
+#vec<-c( "trans.beta", "trans.beta", "trans.beta", "trans.beta", "trans.beta", "trans.beta", "fecundls",  
+#        "survivalL",  "survivalL",  "survivalL",  "survivalH",  "survivalH",  "survivalH",  "survivalL", 
+ #       "survivalL",  "survivalL",  "survivalH",  "survivalH",  "survivalH",  "survivalL",  "survivalH", 
+  #      "survivalH",  "survivalL",  "fecundsr")
+
+# names.arg=vec,
+
+bp<-barplot(sensNew1$sens_epidem, las=1, col=color, ylab="Sensitivity R0", cex =0.6,
+             xpd=FALSE, main="", ylim=c(-5,5),
+            cex.lab = 2.2, cex.axis= 1.4,xlim=c(0,24),density=dashed) # xpd = Should bars be allowed to go outside region?
+lines(c(-0.75,20),c(0,0))
+
+arrows(bp, sensNew1$sens_epidem - sensNew1$sd_epidem , bp,
+       sensNew1$sens_epidem + sensNew1$sd_epidem  , lwd = 1.5, angle = 90,
+       code = 3, length = 0.03)
+
+#mtext(side = 3,text=c("b) epidem"),adj=0, line =1.7,cex = 1.3)
+
+
+
+# Overall legend
+
+#rm(list=ls()) # remove all objects/memory
+#gc()
+
+par(mar=c(1.1,1.1,1.1,1.1))
+plot(sensNew1$sens_epidem, pch ="",xlab="",ylab="")
+
+legend("topright", 
+       
+c("Breeding SA.H","Breeding SA.L","Breeding B.H","Breeding B.L","Breeding NB.H","Breeding NB.L",
+ "Staying H","Staying L",
+ "Survival C.H.S","Survival C.L.S", "Survival SA.H","Survival SA.L","Survival SA.I&R", "Survival B","Survival NB",
+ "Infection C.H", "Infection C.L", "Infection SA.B.NB.H","Infection SA.B.NB.L",
+ "Sex ratio")
+       ,
+       fill= c("olivedrab4", "olivedrab4", "olivedrab1","olivedrab1","olivedrab3","olivedrab3",
+               "orange1","orange1",
+               "cadetblue","cadetblue","aquamarine4","aquamarine4","aquamarine1","royalblue4","skyblue3",
+               "darkmagenta","darkmagenta","darkorchid1","darkorchid1",
+               "gray0")
+,
+       density = c(NA,80,NA,80,NA,80,
+                   NA,80,
+                   NA,80,NA,80,NA,NA,NA,
+                   NA,80,NA,80,
+                   NA))
+
+
+
+```
+
+
+
+
+## References (R packages) ##
+
+
+Stubben, C. & Milligan, B. Estimating and analyzing demographic models using the popbio package in R. J. Stat. Softw 22, 1-23 (2007).
+
+Stott, I., Hodgson, D. J. & Townley, S. popdemo: an R package for population demography using projection matrix analysis. Methods Ecol. Evol. 3, 797-802 (2012).
+
+
+
+
+
+
+
+
