@@ -21,3 +21,13 @@ The code code **2_Model analysis** is structured as follows:
      * iii) Post-epidemic
      * iv) Short-term population dynamics (Fig 4)
 
+The code **3_Model_Analysis_stochastic** presents the stochastic analysis of the matrix model. To calculate standard deviations of (λ) and R0 (Figure 1), confidence intervals for the sensitivity analysis of (λ) and R0 (Figures 2,3) and to describe changes in population size over time while accounting for parameter uncertainty (Figure 5), we used Monte Carlo iterations.
+
+This code is structured as follows:
+
+  * 1 Monte Carlo iterations to calcule the mean + SD of the population’s growth rate (Fig 1A), R0 (Fig 1B) and population abundance (Fig 5).
+      * a) Plotting mean + SD of population’s growth rate and R0 (Fig 1)
+      * b) Plotting changes in population abundance - complete model and “no rank” model (Fig 5)
+  * 2 Sensitivity analysis of the population’s growth rate (λλ)(Fig 2)
+
+  * 3 Sensitivity analysis of R0 (Fig 3)
