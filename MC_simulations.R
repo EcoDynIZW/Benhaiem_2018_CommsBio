@@ -1,28 +1,19 @@
 
-# Maybe apply normdistr to sex ratio and litter size ?
-# yes we could but we do not know which variance to use ? Or can we obtain it from the data?
 
 ########## R0 is the eigenvalue of the next generation matrix NGM
-##        NGM is the result of the product of F x N (repro matrix by fundamental matrix)
-##      JD made a modification of N to include the lambda 
+##         NGM is the result of the product of F x N (repro matrix by fundamental matrix)
+##         JDL made a modification of N to include the lambda 
 
-#rm(list=ls()) # remove all objects/memory
-#gc()
 
-#setwd("C:/Users/lucile/Documents/postdocHyena/Matrix model/SensibiliteR0") # at work! (benhaiem)
-#setwd("C:/Users/benhaiem/Dropbox/Matrix Model/Codes & figures 90-99/Sensitivity R0")
-
-### This file has 4 functions meant to calculate the amount of uncertainty associated to the different population indcators 
-# such as population growth, basic reproduction number, sensitivity values...
-# normdist allow to draw the regression coefficients from a normal distribution,  
+### This file has 4 functions meant to calculate the amount of uncertainty associated to the different population indicators 
+# such as the population growth rate, the basic reproduction number, sensitivity values...
+# normdist allows to draw the regression coefficients from a normal distribution,  
 # paramdelta allows to convert the regression coefficients which are on a logit scale into a probability bounded from 0 to 1.  
-# build_matrix generates for each monte carlo iteration the projection matrix as well as the next generation matrix necessary to caluclate the R0. It also calls the function vitalsense used to get the second order sensitivity and elasticity values for each biological parameter
-# sens_elas_num is meant to calculate the sensitivty of R0 to variations in each biological parameters (demgraphic, social or epidemiological) 
+# build_matrix generates for each Monte Carlo iteration the projection matrix as well as the next generation matrix necessary to caluclate the R0. It also calls the function vitalsense used to get the second order sensitivity and elasticity values for each biological parameter
+# sens_elas_num is meant to calculate the sensitivity of R0 to variations in each biological parameter (demgraphic, social or infection) 
+
 library(popdemo)
 library(popbio)
-
-
-
 
 normdist<-function(value, MCiter)
 {
@@ -35,14 +26,14 @@ normdist<-function(value, MCiter)
 
 paramdelta<-function(t, simu)
 {
+  if(t != "post-epidem2")
+  {
     bioparam<-NULL
     for(z in unique(simu$parameter))
     {
       for(y in unique(simu$states))
       {
-        if(t != "post-epidem2")
-        {
-          
+        
         Cintercept <- subset(simu, Time=="post-epidem2" & states==y & parameter== z)
         
         Ctemp <- subset(simu, Time==t & states=="all" & parameter == z)
@@ -63,31 +54,39 @@ paramdelta<-function(t, simu)
           bioparam<-cbind(bioparam, otherparam)
         }
         
-        }
-        else 
-        {
-              Cintercept <- subset(simu, Time=="post-epidem2" & states==y & parameter== z)
-              
-              Totalcoeff<-Cintercept
-              
-              if(dim(Cintercept)[1] > 0)
-              {
-                av<-t(exp(Totalcoeff[1,c(1, 6: (MCiter+5))])/(1+exp(Totalcoeff[1,c(1, 6: (MCiter+5))])))
-                colnames(av)<-Totalcoeff[1,3]
-                bioparam<-cbind(bioparam, av)  
-              }
-              
-              Cothers <- subset(simu, Time=="allperiods" & states==y & parameter== z)
-              if(dim(Cothers)[1] > 0) 
-              {
-                otherparam<-t(exp(Cothers[1,c(1, 6: (MCiter+5))])/(1+exp(Cothers[1,c(1, 6:(MCiter+5))])))
-                colnames(otherparam)<-Cothers[1,3]
-                bioparam<-cbind(bioparam, otherparam)
-              }
-              
-            }
       }
     }
+  }
+  else
+  {
+    bioparam<-NULL
+    for(z in unique(simu$parameter))
+    {
+      for(y in unique(simu$states))
+      {
+        
+        Cintercept <- subset(simu, Time=="post-epidem2" & states==y & parameter== z)
+        
+        Totalcoeff<-Cintercept
+        
+        if(dim(Cintercept)[1] > 0)
+        {
+          av<-t(exp(Totalcoeff[1,c(1, 6: (MCiter+5))])/(1+exp(Totalcoeff[1,c(1, 6: (MCiter+5))])))
+          colnames(av)<-Totalcoeff[1,3]
+          bioparam<-cbind(bioparam, av)  
+        }
+        
+        Cothers <- subset(simu, Time=="allperiods" & states==y & parameter== z)
+        if(dim(Cothers)[1] > 0) 
+        {
+          otherparam<-t(exp(Cothers[1,c(1, 6: (MCiter+5))])/(1+exp(Cothers[1,c(1, 6:(MCiter+5))])))
+          colnames(otherparam)<-Cothers[1,3]
+          bioparam<-cbind(bioparam, otherparam)
+        }
+        
+      }
+    }
+  }
   return (bioparam)
 }
 
@@ -100,34 +99,18 @@ var<-data$SE
 
 # creates a table with all values from the Monte Carlo simulation (column) for each demographic, epidemiological, and social parameter (rows)
 
-global<-cbind(as.numeric(param), as.numeric(var)) # global is like coeff reg file, 27 rows, 2 columns
-MC<-apply(global,1, function (x) normdist(x, MCiter)) # apply the function normdist, 1000 times (=MCiterations)
-# dim(MC)
-# [1] 1000  27
- 
-MCtrans<-t(MC) # whatch out here "t" is "transpose" ! not the period!
-# dim(MC trans)
-# [1] 27  1000
+global<-cbind(as.numeric(param), as.numeric(var)) 
+MC<-apply(global,1, function (x) normdist(x, MCiter)) 
 
-simu<-cbind(data, MCtrans)# simu: 29 rows -> 1000 col + 5 for EST, SE, states, Time, parameter 
-#write.csv(simu,"simuTest.csv")
+MCtrans<-t(MC) 
 
-theta<-paramdelta(period, simu) # 
-theta<-as.data.frame(theta)
-# write.csv(theta,"Theta.csv")# 
+simu<-cbind(data, MCtrans) 
 
-
-
-
-
-
-
-# write.csv(theta,"ThetaTest.csv")# 1000 rows for each parameter, backtransformed
-
+theta<-paramdelta(period, simu) 
+theta<-as.data.frame(theta) 
 
 # contains the 1000 values now backtransformed, focusing only on period epidemic
 # each column starts with the name of the parameter (C.L.S, C.L.I...)
-
 
 #########----------------------------------- STEP 2 : constructing the MATRIX MODEL to get R0 
 
@@ -137,19 +120,6 @@ theta<-as.data.frame(theta)
 
 
 build_matrix <- function(theta, i) {
-  
-   if(checkNodisease == TRUE)
-   {
-      theta[i,"C.L"] <- 1 # here we retransform it as "real" beta value...
-      theta[i,"C.H"] <- 1 # 
-     
-      theta[i,"SA&NB&B.L"] <- 1
-      theta[i,"SA&NB&B.H"] <- 1
-      
-      theta[i,"SA&NB&B.L"] <- 1
-      theta[i,"SA&NB&B.H"] <- 1
-    }
-    
   NStages<-22
   param <- list(
   phiCLS = theta[i,"C.L.S"], # cub low ranked & susceptible
@@ -302,7 +272,6 @@ F <- expression(0, 0,           0, 0,	         0, 0,		   0, 0, 0,	        0, 0, 
     
   M.final<-matrix(sapply(Mat, eval, param),  nrow = (NStages), ncol = (NStages), byrow = TRUE)
   
-  # I give it another name than the metamatrix as we will need the metamatrix for calculating as JD suggests 
   sens<-vitalsens(Mat,param)
   
    
@@ -322,7 +291,7 @@ F <- expression(0, 0,           0, 0,	         0, 0,		   0, 0, 0,	        0, 0, 
   
   ### --- Next generation Matrix NGM:
   
-  NGM <- Fvalue %*% N  # Do we need that? here does not take into account JD's modification
+  NGM <- Fvalue %*% N  
   
   return(list(M.final, sens, NGM)) #the aim of build_matrix is to return the NGM for each value in theta 
 }
@@ -365,8 +334,6 @@ for(i in 1: MCiter) # MCiter = 1000
 }
 
 
-
-
 #########----------------------------------- STEP 3 : calculating sensitivity of R0
 
 
@@ -379,15 +346,14 @@ sens_elas_num <- function(pos, theta, delta=1e-4){
     # get parameters
   sensR0<-NULL
   elasR0<-NULL
- #---------------- For each param value in the MC file, create a NGM...THIS for in is within sens_elas_num! 
-   
+
   for(i in 1: MCiter) # MCiter = 1000
   {  
 
     # build R0 matrix
-    A <- NGMstoch[[i]] # Here we apply build_matrix that returns the NGM! A is NGM!
+    A <- build_matrix(theta, i)[[3]] # Here we apply build_matrix that returns the NGM. A is NGM
  
-    # calculate growth rate ---> lambda in fact is R0 here!!! (the eigenvalue of NGM)
+    # calculate growth rate ---> lambda is R0 here (the eigenvalue of NGM)
     lambda = max(Re(eigen(A)$values)) # Re primitive
   
     # get focal parameter

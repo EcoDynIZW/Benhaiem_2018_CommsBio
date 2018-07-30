@@ -39,7 +39,7 @@ This code presents the stochastic analysis of the matrix model. To calculate sta
 
 This code is structured as follows:
 
-1) Monte Carlo iterations to calcule the mean + SD of the population's growth rate (Fig 1A), R0 (Fig 1B) and population abundance (Fig 5).
+1) Monte Carlo iterations to calcule the mean + SD of the population's growth rate (Fig 1), of R0 and population abundance (Fig 5).
 
   a) Plotting mean + SD of population's growth rate and R0 (Fig 1)
   b) Plotting changes in population abundance - complete model and "no rank" model (Fig 5)
@@ -76,13 +76,7 @@ library(popbio)
   tabmoy[1,1]<-mean_lambda
   tabmoy[1,2]<-sd_lambda
   
-  # R0
-  allrnot<-unlist(lapply(NGMstoch, lambda)) 
-  mean_rnot<-mean(allrnot)
-  sd_rnot<-sd(allrnot)
-  tabmoy[2,1]<-mean_rnot
-  tabmoy[2,2]<-sd_rnot
-  
+    
   # Population size
   popsizeMean <- apply(popvec, 1, mean)
   popsizeSD <- apply(popvec, 1, sd)
@@ -106,28 +100,38 @@ library(popbio)
   #########----------- running the function which caluculates the senstivity of R0
 if(t == "epidem")
 {  
-  for(r in 1:ncol(theta))
+# R0
+# To do so we extract the dominant eigen value from the next generation matrix using the lambda function of the popdemo package
+  allrnot<-unlist(lapply(NGMstoch, lambda)) 
+  mean_rnot<-mean(allrnot)
+  sd_rnot<-sd(allrnot)
+  tabmoy[2,1]<-mean_rnot
+  tabmoy[2,2]<-sd_rnot
+
+for(r in 1:ncol(theta))
 {
-  sensi<- sens_elas_num(r, theta, delta=1e-4) # here we apply the sens_elas_num function! r = pos
+  sensi<- sens_elas_num(r, theta, delta=1e-4) 
   SensR0[r,2]<-as.numeric(mean(sensi[[2]])) 
   SensR0[r,3]<-as.numeric(sd(sensi[[2]]))
   SensR0[r,1]<-as.character(sensi[[1]])
 }
+  
 }
   
   return(list(tabmoy, popsizeMean, popsizeSD, sens_lambdaMean, sens_lambdaSD, SensR0)) 
 }
 ```
 
-Second, we load the text file containing the regression coefficients and the two R files MCSimulations and MCSimulations_postepidem. In these two R files, we first draw 1000 values from normal distributions with means equal to the regression coefficients of the MECMR model and with standard deviations equal to the standard errors associated with these regression coefficients. To obtain the MECMR parameter estimates and insure that they corresponded to probabilities bounded between 0 and 1, we back-transformed those simulated regression coefficients using the logit-function after accounting for the structural interactions and the temporal additive effects detected on those parameters. 
+Second, we load the text file containing the regression coefficients and the R file MC_simulations. In this file, we first draw 1000 values from normal distributions with means equal to the regression coefficients of the MECMR model and with standard deviations equal to the standard errors associated with these regression coefficients. To obtain the MECMR parameter estimates and insure that they corresponded to probabilities bounded between 0 and 1, we back-transformed those simulated regression coefficients using the logit-function after accounting for the structural interactions and the temporal additive effects detected on those parameters. 
 
 
 ```{r} 
-data<-read.table("./RegressionCoefficient.txt", header = TRUE) #CHANGE NAME --> data is not good
+data<-read.table("./RegressionCoefficient.txt", header = TRUE) 
 
-MCiter<-1000 # Number of Monte Carlo iterations 
+MCiter<-3 # Number of Monte Carlo iterations 
 
-checkNodisease <- FALSE # Check if we are in the projection phase were the disease is extinct (then set the infection probaility to 0 in the MC_simualtionsUnique.R file)
+checkNodisease <- FALSE # Check if we are in the projection phase were the disease is extinct (then set the infection probability to 0 in the MC_simualtionsUnique.R file)
+
 # Pre-epidemic period (1990-1992)
 t<-"pre-epidem"
 period <- t
@@ -175,24 +179,18 @@ a) Plotting mean + SD of population's growth rate and R0 (Fig1)
 
 ```{r} 
 
-data2 <- matrix(0,3,4)
-colnames(data2) <- c("R0.mean", "R0.SD","Lambda", "Lambda.SD")
+data2 <- matrix(0,3,2)
+colnames(data2) <- c("Lambda", "Lambda.SD")
 rownames(data2) <- c("pre-epidem", "epidem","post-epidem1")
 
-data2[1,3]<-tabprepidem[[1]][1,1] # mean lambda
-data2[1,4]<-tabprepidem[[1]][1,2] # SD lambda
-data2[1,1]<-tabprepidem[[1]][2,1] # mean R0
-data2[1,2]<-tabprepidem[[1]][2,2] # SD R0
+data2[1,1]<-tabprepidem[[1]][1,1] # mean lambda
+data2[1,2]<-tabprepidem[[1]][1,2] # SD lambda
 
-data2[2,3]<-tabepidem[[1]][1,1] # mean lambda
-data2[2,4]<-tabepidem[[1]][1,2] # SD lambda
-data2[2,1]<-tabepidem[[1]][2,1] # mean R0
-data2[2,2]<-tabepidem[[1]][2,2] # SD R0
+data2[2,1]<-tabepidem[[1]][1,1] # mean lambda
+data2[2,2]<-tabepidem[[1]][1,2] # SD lambda
 
-data2[3,3]<-tabpost1[[1]][1,1] # mean lambda
-data2[3,4]<-tabpost1[[1]][1,2] # SD lambda
-data2[3,1]<-tabpost1[[1]][2,1] # mean R0
-data2[3,2]<-tabpost1[[1]][2,2] # SD R0
+data2[3,1]<-tabpost1[[1]][1,1] # mean lambda
+data2[3,2]<-tabpost1[[1]][1,2] # SD lambda
 
 par(mfrow=c(1,2))
 
@@ -202,8 +200,8 @@ colvec <- c("white","black","#CC6600","black","white")
 
 # -------------------- > lambda
 
-mean<-c(0,data2[c("pre-epidem","epidem","post-epidem1"),3],0) 
-sd<-c(0,data2[c("pre-epidem","epidem","post-epidem1"),4],0)
+mean<-c(0,data2[c("pre-epidem","epidem","post-epidem1"),1],0) 
+sd<-c(0,data2[c("pre-epidem","epidem","post-epidem1"),2],0)
 
 mean<-as.numeric(mean)
 sd<-as.numeric(sd)
@@ -221,29 +219,14 @@ colvec2 <-c("black","#CC6600","black")
 axis(side=1,at=c(1:5),label=names(x),cex.axis=1.3, las =2)
 mtext(side = 2, text ="Population growth rate", line = 3.7, cex=1.6)
 abline(h=1, lty=2)
-mtext(side = 3,text=c("a)"),adj=0, line =1.7,cex = 1.3)
-
-
-mean1<-c(-0.5,data2[c("pre-epidem","epidem","post-epidem1"),1],-0.5) 
-sd1<-c(-0.5,data2[c("pre-epidem","epidem","post-epidem1"),2],-0.5)
-
-mean1<-as.numeric(mean1)
-sd1<-as.numeric(sd1)
-
-colvec1 <- c("black","black","#CC6600","black")
-
-plotCI(x,mean1, 
-       uiw=sd1, err="y",las=1, ylab = "", cex=1.4,xaxt="n",
-       ylim=c(0,7),xlab ="", cex.axis=1.4,
-       lwd=4, pch=20, col=colvec1) 
-
-names(x)<-c("pre-epidem","epidem","post-epidem","")
-axis(side=1,at=c(1:5),label=names(x),cex.axis=1.3,las =2)
-mtext(side = 2, text ="Basic reproduction number", line = 3.7, cex=1.6)
-abline(h=1, lty=2)
-mtext(side = 3,text=c("b)"),adj=0, line =1.7,cex = 1.3)
-
 ```
+
+
+In the following table, we displayed the basic reproduction number during the outbreak  
+
+Basic reproduction number         | Mean estimate    | SE  
+-------------                     | --------------   | ------------------  
+**R0**                  | `r tabepidem[[1]][2,1]`    | `r tabepidem[[1]][2,2]`    
 
 
 b) Plotting changes in population abundance - complete model and "no rank" model Fig5)
@@ -252,7 +235,7 @@ b) Plotting changes in population abundance - complete model and "no rank" model
 We can then describe past (1990-2010) and predicted (2011-2020) temporal changes in population abundance (Figure 5) given parameter uncertainty during the 20 years of survey (1990-2010). 
 
 - To describe the past temporal changes during the study period (1990-2010) we calculated 1000 values of population growth rate for each year of the study period accounting for temporal variations in the mean estimates between the pre-epidemic, epidemic and post-epidemic phases. We described with a Markov chain the changes in population size by mutliplying population vector of a given year by lambda and reinitialiaze the population vector to the resulting vector of next year abundance. the initial population vector was defined as the product of 100 individuals and the stable stage distribution.     
-- To predict abundance of spotted hyenas for 10 years after the end of the study period (i.e. 2011-2020) (see MCSimulations_postepidem.R), we considered the 1000 block-matrices M implemented with the MECMR parameter estimates associated with the second post-epidemic period (2000-2010), and we determined the population vector of the number of individuals in the 22 demographic, social and infection states during the last year of the survey (2010). This vector was defined as the product of the mean abundance estimated in 2010 and the stable stage distribution. We then multiplied the matrices with this population vector to obtain 1000 population vectors and calculate the confidence intervals of the abundance the following year. These population vectors were then multiplied again by the simulated matrices to calculate the mean abundance and its associated confidence interval in the following year. In such case the range of abundance increases with time as we use all the poulation vectors from a previous year (and not only the mean one) to calculate the range of population sizes the next year, accounting for the uncertainty around the parameter estimates. This Markov chain in which the population vectors of the next year only depend on the population vectors of the current year and of the simulated projection matrices was then reiterated for 10 years.   
+- To predict abundance of spotted hyenas for 10 years after the end of the study period (i.e. 2011-2020) we considered the 1000 block-matrices M implemented with the MECMR parameter estimates associated with the second post-epidemic period (2000-2010), and we determined the population vector of the number of individuals in the 22 demographic, social and infection states during the last year of the survey (2010). This vector was defined as the product of the mean abundance estimated in 2010 and the stable stage distribution. We then multiplied the matrices with this population vector to obtain 1000 population vectors and calculate the confidence intervals of the abundance the following year. These population vectors were then multiplied again by the simulated matrices to calculate the mean abundance and its associated confidence interval in the following year. In such case the range of abundance increases with time as we use all the poulation vectors from a previous year (and not only the mean one) to calculate the range of population sizes the next year, accounting for the uncertainty around the parameter estimates. This Markov chain in which the population vectors of the next year only depend on the population vectors of the current year and of the simulated projection matrices was then reiterated for 10 years.   
 
 
 ```{r} 
@@ -277,7 +260,7 @@ for(t in 2:21)
 }  
 
 p<-1
-for(t in 23:32)
+for(t in 22:32)
 {
   p<-p+1 
   popproj[t]<- tabprojection[[2]][p]
@@ -286,9 +269,9 @@ for(t in 23:32)
 }  
 
 # Here We delete the meaningless growth rate obtained at the first year of predicitons phase, which correponds to  a year of transition between the descriptive and predicitve part of the analysis 
-popproj<-popproj[-22] 
-varplus<-varplus [-22] 
-varmoins<-varmoins[-22] 
+popproj<-popproj[-22]
+varplus<-varplus [-22]
+varmoins<-varmoins[-22]
 
 ####
 
@@ -353,12 +336,12 @@ lambdaseq <- c(rep(tabprepidemNR[[1]][1,1], 3), rep(tabepidemNR[[1]][1,1], 2) , 
 lambdase <- c(rep(tabprepidemNR[[1]][1,2], 3), rep(tabepidemNR[[1]][1,2], 2) , rep(tabpost1NR[[1]][1,2], 5),rep(tabpost2NR[[1]][1,2], 11),rep(tabprojectionNR[[1]][1,2], 10)) 
 
  
-popproj<-rep(0,31) # vecteur avec 31fois 0
-popproj[1]<-100 # on replace la premiere entree par 100
+popproj<-rep(0,31) 
+popproj[1]<-100 
 varmoins<-rep(0,31)
 varplus<-rep(0,31)
-varplus[1]<-100 # pas d erreur sur la premiere valeur
-varmoins[1]<-100 # pas d erreur sur la premiere valeur
+varplus[1]<-100 
+varmoins[1]<-100 
 
 
 # loop on the retrospective (1990 to 2010)
@@ -382,13 +365,10 @@ for(t in 22:33)
 } 
 
 # delete 2011/2012
-popproj<-popproj[-22]
-varplus<-varplus [-22]
-varmoins<-varmoins[-22]
+popproj<-popproj[-c(22,23)]
+varplus<-varplus [-c(22,23)]
+varmoins<-varmoins[-c(22,23)]
 
-popproj<-popproj[-22]
-varplus<-varplus [-22]
-varmoins<-varmoins[-22]
 
 matNR <- cbind(popproj,varmoins,varplus)
 matNR<-as.data.frame(matNR)
@@ -445,7 +425,7 @@ p + theme_bw() +
 
 3) Sensitivity analyses of the population's growth rate ($\lambda$)(Fig2)
 
-To determine which parameters contributed most to($\lambda$) and predict the results of future changes in parameter estimates, we performed a sensitivity analysis. When elements of a population matrix are composed of several vital rates, the classical first order sensitivity analysis is not recommended, as it does not allow disentangling the effects of demographic, social and infection parameters. Therefore, we conducted lower-level sensitivity analyses for ($\lambda$). In the source file **MCSimulations** and **MCSimulations_postepidem** we applied the function 'vitalsens' from the R package 'popbio which evaluate the expression oft the matrix projection using all parameter values of the MonteCarlo iterations.
+To determine which parameters contributed most to($\lambda$) and predict the results of future changes in parameter estimates, we performed a sensitivity analysis. When elements of a population matrix are composed of several vital rates, the classical first order sensitivity analysis is not recommended, as it does not allow disentangling the effects of demographic, social and infection parameters. Therefore, we conducted lower-level sensitivity analyses for ($\lambda$). In the source file **MC_simulations** we applied the function 'vitalsens' from the R package 'popbio which evaluate the expression oft the matrix projection using all parameter values of the MonteCarlo iterations.
 
 
 
@@ -458,8 +438,6 @@ layout.show(nf)
 
  figtab<-cbind(as.numeric(tabprepidem[[4]]), as.numeric(tabprepidem[[5]]), as.numeric(tabepidem[[4]]), as.numeric(tabepidem[[5]]), as.numeric(tabpost1[[4]]), as.numeric(tabpost1[[5]]), as.numeric(tabpost2[[4]]), as.numeric(tabpost2[[5]])) # removes the character names and the ""
 
-  
-  
   colnames(figtab)<-c("sens_preepidem","sd_preepidem", "sens_epidem","sd_epidem", "sens_postepidem1","sd_postepidem1", "sens_postpidem2","sd_postepidem2")
 
   figtab<-as.data.frame(figtab)
@@ -689,8 +667,6 @@ mtext(side = 3,text= expression(paste(bold("c"))),adj=0, line =1.7,cex = 1.6)
 
 # Overall legend 
 
-#rm(list=ls()) # remove all objects/memory
-#gc()
 
 par(mar=c(5.1,5.1,4.1,2.1))
 
@@ -852,14 +828,9 @@ arrows(bp, sensNew1$sens_epidem - sensNew1$sd_epidem , bp,
        sensNew1$sens_epidem + sensNew1$sd_epidem  , lwd = 1.5, angle = 90,
        code = 3, length = 0.03)
 
-#mtext(side = 3,text=c("b) epidem"),adj=0, line =1.7,cex = 1.3)
-
-
 
 # Overall legend
 
-#rm(list=ls()) # remove all objects/memory
-#gc()
 
 par(mar=c(1.1,1.1,1.1,1.1))
 plot(sensNew1$sens_epidem, pch ="",xlab="",ylab="")
