@@ -128,7 +128,7 @@ Second, we load the text file containing the regression coefficients and the R f
 ```{r} 
 data<-read.table("./RegressionCoefficient.txt", header = TRUE) 
 
-MCiter<-3 # Number of Monte Carlo iterations 
+MCiter<-1000 # Number of Monte Carlo iterations 
 
 checkNodisease <- FALSE # Check if we are in the projection phase were the disease is extinct (then set the infection probability to 0 in the MC_simualtionsUnique.R file)
 
