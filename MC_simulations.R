@@ -1,19 +1,11 @@
 
-
-########## R0 is the eigenvalue of the next generation matrix NGM
-##         NGM is the result of the product of F x N (repro matrix by fundamental matrix)
-##         JDL made a modification of N to include the lambda 
-
-
-### This file has 4 functions meant to calculate the amount of uncertainty associated to the different population indicators 
+### This file has 4 functions meant to calculate the amount of uncertainty associated with the different population indicators 
 # such as the population growth rate, the basic reproduction number, sensitivity values...
 # normdist allows to draw the regression coefficients from a normal distribution,  
 # paramdelta allows to convert the regression coefficients which are on a logit scale into a probability bounded from 0 to 1.  
 # build_matrix generates for each Monte Carlo iteration the projection matrix as well as the next generation matrix necessary to caluclate the R0. It also calls the function vitalsense used to get the second order sensitivity and elasticity values for each biological parameter
 # sens_elas_num is meant to calculate the sensitivity of R0 to variations in each biological parameter (demgraphic, social or infection) 
 
-library(popdemo)
-library(popbio)
 
 normdist<-function(value, MCiter)
 {
@@ -109,7 +101,10 @@ simu<-cbind(data, MCtrans)
 theta<-paramdelta(period, simu) 
 theta<-as.data.frame(theta) 
 
-# contains the 1000 values now backtransformed, focusing only on period epidemic
+theta$ls <- rep(1.53,(MCiter+1))
+
+theta$sr<-rep(0.52, (MCiter+1))
+# contains the 1000 values now backtransformed, focusing only on the epidemic period 
 # each column starts with the name of the parameter (C.L.S, C.L.I...)
 
 #########----------------------------------- STEP 2 : constructing the MATRIX MODEL to get R0 
@@ -119,7 +114,22 @@ theta<-as.data.frame(theta)
 #  -------- This function creates the NEXT GENERATION MATRIX 
 
 
-build_matrix <- function(theta, i) {
+build_matrix <- function(theta, i, checkNodisease) {
+  
+  
+  if(checkNodisease == TRUE)
+  {
+    theta[i,"C.L"] <- 1 # here we retransform it as "real" beta value
+    theta[i,"C.H"] <- 1 # 
+    
+    theta[i,"SA&NB&B.L"] <- 1
+    theta[i,"SA&NB&B.H"] <- 1
+    
+    theta[i,"SA&NB&B.L"] <- 1
+    theta[i,"SA&NB&B.H"] <- 1
+  }
+  
+  
   NStages<-22
   param <- list(
   phiCLS = theta[i,"C.L.S"], # cub low ranked & susceptible
@@ -127,7 +137,7 @@ build_matrix <- function(theta, i) {
   
   
   phiCHS = theta[i,"C.H.S"], # cub high ranked & susceptible
-  phiCHI = theta[i,"C.H.I"], # cub high ranked & i
+  phiCHI = theta[i,"C.H.I"], # cub high ranked & infected
   
   # SUBADULT
   phiSLS = theta[i,"SA.L.S"],
@@ -164,7 +174,7 @@ build_matrix <- function(theta, i) {
   rHH.R = theta[i,"rHH"], 
   
   ##########Infection 
-  betaCL =  1-theta[i,"C.L"], # here we retransform it as "real" beta value...
+  betaCL =  1-theta[i,"C.L"], # here we retransform it as "real" beta value
   betaCH =  1-theta[i,"C.H"], # 
   
   betaSL = 1-theta[i,"SA&NB&B.L"],
@@ -183,8 +193,10 @@ build_matrix <- function(theta, i) {
   bBH = theta[i,"bB.H"],  # transition probability that breeders of High rank become breeder again 
   bNBH = theta[i,"bNB.H"], # transition probability that non-breeder of High rank become breeder
   
-  ls = 1.53, 
-  sr = 0.52
+  
+  ls = theta[i,"ls"], 
+  sr = theta[i,"sr"]
+ 
   ) 
 
 # the matrix Mat is the full model:    
@@ -216,7 +228,8 @@ Mat <-expression(0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	phiCLS*(1-betaCL)*ls* sr,	phiCLS*
   
 
 
-# Tr is the matrix of transitions; not used actually
+# Tr is the matrix of transitions
+
 Tr <-expression(
       0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,
       0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,	0,
@@ -272,6 +285,7 @@ F <- expression(0, 0,           0, 0,	         0, 0,		   0, 0, 0,	        0, 0, 
     
   M.final<-matrix(sapply(Mat, eval, param),  nrow = (NStages), ncol = (NStages), byrow = TRUE)
   
+ 
   sens<-vitalsens(Mat,param)
   
    
@@ -300,7 +314,7 @@ F <- expression(0, 0,           0, 0,	         0, 0,		   0, 0, 0,	        0, 0, 
 #####step 2 : calculating the SD of lambda and sensitivity analysis of lambda
 
 
-initmat<-build_matrix(theta, 1)[[1]]
+initmat<-build_matrix(theta, 1, checkNodisease)[[1]]
 #paraminit<-initmat[4]
 
 
@@ -325,7 +339,7 @@ Rmatrix<-array(0,dim=c(NStages, NStages, MCiter))
 
 for(i in 1: MCiter) # MCiter = 1000
 {  
-  allres<-build_matrix(theta, i)
+  allres<-build_matrix(theta, i, checkNodisease)
   Mproj[[i]] <- allres[[1]]
   senslambda[[i]] <- allres[[2]]
   NGMstoch[[i]] <- allres[[3]]
@@ -351,7 +365,7 @@ sens_elas_num <- function(pos, theta, delta=1e-4){
   {  
 
     # build R0 matrix
-    A <- build_matrix(theta, i)[[3]] # Here we apply build_matrix that returns the NGM. A is NGM
+    A <- build_matrix(theta, i, checkNodisease)[[3]] # Here we apply build_matrix that returns the NGM. A is NGM
  
     # calculate growth rate ---> lambda is R0 here (the eigenvalue of NGM)
     lambda = max(Re(eigen(A)$values)) # Re primitive
@@ -365,7 +379,7 @@ sens_elas_num <- function(pos, theta, delta=1e-4){
     theta_new[i,pos] = c_new
     
     # build A_new with perturbed focal parameter
-    A_new <- build_matrix(theta_new, i)[[3]]
+    A_new <- build_matrix(theta_new, i, checkNodisease)[[3]]
     
     # calculate growth rate (new R0)
     lambda_new = max(Re(eigen(A_new)$values))
