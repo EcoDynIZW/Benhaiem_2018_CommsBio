@@ -1,13 +1,4 @@
----
-title: "README"
-author: "Sarah Benhaiem and Lucile Marescot"
-date: "August 2, 2018"
-output:
-  pdf_document: default
-  html_document: default
----
-
-SIR Matrix model
+# SIR Matrix model
 
 The code "1_Model construction.Rmd" loads the input values for the 3 epidemic periods and builds the matrix model. It is structured as follows:
 
