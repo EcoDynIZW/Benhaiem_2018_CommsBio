@@ -1,4 +1,4 @@
-# Benhaiem et al. 2020 *Communications Biology* SIR Matrix Model
+# Benhaiem et al. 2018 *Communications Biology* SIR Matrix Model
 
 > **Sarah Benhaiem**, **Lucile Marescot**, **Marion L. East**, **Stephanie Kramer-Schadt**, Olivier Gimenez, ‪Jean-Dominique Lebreton, **Heribert Hofer** (2018) Slow recovery from a disease epidemic in the spotted hyena, a keystone social carnivore. *Communications Biology* **1**:201. DOI: [10.1038/s42003-018-0197-1](https://doi.org/10.1038/s42003-018-0197-1)
 
